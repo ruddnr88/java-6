@@ -4,6 +4,12 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -52,18 +58,216 @@ class Session {
 	}
 }
 
+//DB 커넥션(진짜 DB와의 연결을 담당)
+class DBConnection {
+	private Connection connection;
+
+	public void connect() {
+		String url = "jdbc:mysql://localhost:3306/site5?serverTimezone=UTC";
+		String user = "sbsst";
+		String password = "sbs123414";
+		String driverName = "com.mysql.cj.jdbc.Driver";
+
+		try {
+			// ① 로드(카카오 택시에 `com.mysql.cj.jdbc.Driver` 라는 실제 택시 드라이버를 등록)
+			// 하지만 개발자는 실제로 `com.mysql.cj.jdbc.Driver`를 다룰 일은 없다.
+			// 내부적으로 JDBC가 알아서 다 해주기 때문에 우리는 JDBC의 DriverManager 를 통해서 DB와의 연결을 얻으면 된다.
+			Class.forName(driverName);
+
+			// ② 연결
+			connection = DriverManager.getConnection(url, user, password);
+		} catch (ClassNotFoundException e) {
+			// `com.mysql.cj.jdbc.Driver` 라는 클래스가 라이브러리로 추가되지 않았다면 오류발생
+			System.out.println("[로드 오류]\n" + e.getStackTrace());
+		} catch (SQLException e) {
+			// DB접속정보가 틀렸다면 오류발생
+			System.out.println("[연결 오류]\n" + e.getStackTrace());
+		}
+	}
+
+	public int selectRowIntValue(String sql) {
+		Map<String, Object> row = selectRow(sql);
+
+		for (String key : row.keySet()) {
+			Object value = row.get(key);
+
+			if (value instanceof String) {
+				return Integer.parseInt((String) value);
+			}
+			if (value instanceof Long) {
+				return (int) (long) value;
+			} else {
+				return (int) value;
+			}
+		}
+
+		return -1;
+	}
+
+	public String selectRowStringValue(String sql) {
+		Map<String, Object> row = selectRow(sql);
+
+		for (String key : row.keySet()) {
+			Object value = row.get(key);
+
+			return value + "";
+		}
+
+		return "";
+	}
+
+	public boolean selectRowBooleanValue(String sql) {
+		int rs = selectRowIntValue(sql);
+
+		return rs == 1;
+	}
+
+	public Map<String, Object> selectRow(String sql) {
+		List<Map<String, Object>> rows = selectRows(sql);
+
+		if (rows.size() > 0) {
+			return rows.get(0);
+		}
+
+		return new HashMap<>();
+	}
+
+	public List<Map<String, Object>> selectRows(String sql) {
+		// SQL을 적는 문서파일
+		Statement statement = null;
+		ResultSet rs = null;
+
+		List<Map<String, Object>> rows = new ArrayList<>();
+
+		try {
+			statement = connection.createStatement();
+			rs = statement.executeQuery(sql);
+			// ResultSet 의 MetaData를 가져온다.
+			ResultSetMetaData metaData = rs.getMetaData();
+			// ResultSet 의 Column의 갯수를 가져온다.
+			int columnSize = metaData.getColumnCount();
+
+			// rs의 내용을 돌려준다.
+			while (rs.next()) {
+				// 내부에서 map을 초기화
+				Map<String, Object> row = new HashMap<>();
+
+				for (int columnIndex = 0; columnIndex < columnSize; columnIndex++) {
+					String columnName = metaData.getColumnName(columnIndex + 1);
+					// map에 값을 입력 map.put(columnName, columnName으로 getString)
+					row.put(columnName, rs.getObject(columnName));
+				}
+				// list에 저장
+				rows.add(row);
+			}
+		} catch (SQLException e) {
+			System.err.printf("[SELECT 쿼리 오류, %s]\n" + e.getStackTrace() + "\n", sql);
+		}
+
+		try {
+			if (statement != null) {
+				statement.close();
+			}
+
+			if (rs != null) {
+				rs.close();
+			}
+		} catch (SQLException e) {
+			System.err.println("[SELECT 종료 오류]\n" + e.getStackTrace());
+		}
+
+		return rows;
+	}
+
+	public int update(String sql) {
+		// UPDATE 명령으로 몇개의 데이터가 수정되었는지
+		int affectedRows = 0;
+
+		// SQL을 적는 문서파일
+		Statement statement = null;
+
+		try {
+			statement = connection.createStatement();
+			affectedRows = statement.executeUpdate(sql);
+		} catch (SQLException e) {
+			System.err.printf("[UPDATE 쿼리 오류, %s]\n" + e.getStackTrace() + "\n", sql);
+		}
+
+		try {
+			if (statement != null) {
+				statement.close();
+			}
+		} catch (SQLException e) {
+			System.err.println("[UPDATE 종료 오류]\n" + e.getStackTrace());
+		}
+
+		return affectedRows;
+	}
+
+	public int insert(String sql) {
+		int id = -1;
+
+		// SQL을 적는 문서파일
+		Statement statement = null;
+		// SQL의 실행결과 보고서
+		ResultSet rs = null;
+
+		try {
+			statement = connection.createStatement();
+			statement.executeUpdate(sql, Statement.RETURN_GENERATED_KEYS);
+			rs = statement.getGeneratedKeys();
+			if (rs.next()) {
+				id = rs.getInt(1);
+			}
+		} catch (SQLException e) {
+			System.err.printf("[INSERT 쿼리 오류, %s]\n" + e.getStackTrace() + "\n", sql);
+		}
+
+		try {
+			if (statement != null) {
+				statement.close();
+			}
+
+			if (rs != null) {
+				rs.close();
+			}
+		} catch (SQLException e) {
+			System.err.println("[INSERT 종료 오류]\n" + e.getStackTrace());
+		}
+
+		return id;
+	}
+
+	public void close() {
+		try {
+			if (connection != null) {
+				connection.close();
+			}
+		} catch (SQLException e) {
+			System.err.println("[닫기 오류]\n" + e.getStackTrace());
+		}
+	}
+}
 // Factory
 // 프로그램 전체에서 공유되는 객체 리모콘을 보관하는 클래스
 
 class Factory {
 	private static Session session;
 	private static DB db;
+	private static DBConnection dbConnection;
 	private static BuildService buildService;
 	private static ArticleService articleService;
 	private static ArticleDao articleDao;
 	private static MemberService memberService;
 	private static MemberDao memberDao;
 	private static Scanner scanner;
+
+	public static DBConnection getDBConnection() {
+		if (dbConnection == null) {
+			dbConnection = new DBConnection();
+		}
+		return dbConnection;
+	}
 
 	public static Session getSession() {
 		if (session == null) {
@@ -146,6 +350,8 @@ class App {
 		// 컨트롤러 등록
 		initControllers();
 
+		Factory.getDBConnection().connect();
+
 		// 관리자 회원 생성
 		Factory.getMemberService().join("admin", "admin", "관리자");
 
@@ -185,6 +391,7 @@ class App {
 			controllers.get(reqeust.getControllerName()).doAction(reqeust);
 		}
 
+		Factory.getDBConnection().close();
 		Factory.getScanner().close();
 	}
 }
@@ -287,6 +494,12 @@ class ArticleController extends Controller {
 
 	private void actionList(Request reqeust) {
 		List<Article> articles = articleService.getArticles();
+
+		System.out.println("== 게시물 리스트 시작 ==");
+		for (Article article : articles) {
+			System.out.printf("%d, %s, %s\n", article.getId(), article.getRegDate(), article.getTitle());
+		}
+		System.out.println("== 게시물 리스트 끝 ==");
 	}
 
 	private void actionWrite(Request reqeust) {
@@ -412,7 +625,7 @@ class BuildService {
 			String html = "";
 
 			List<Article> articles = articleService.getArticlesByBoardCode(board.getCode());
-			
+
 			String template = Util.getFileContents("site_template/article/list.html");
 
 			for (Article article : articles) {
@@ -422,7 +635,7 @@ class BuildService {
 				html += "<td><a href=\"" + article.getId() + ".html\">" + article.getTitle() + "</a></td>";
 				html += "</tr>";
 			}
-			
+
 			html = template.replace("${TR}", html);
 
 			html = head + html + foot;
@@ -520,6 +733,7 @@ class MemberService {
 // Dao
 class ArticleDao {
 	DB db;
+	DBConnection dbConnection;
 
 	ArticleDao() {
 		db = Factory.getDB();
@@ -542,7 +756,15 @@ class ArticleDao {
 	}
 
 	public int save(Article article) {
-		return db.saveArticle(article);
+		String sql = "";
+		sql += "INSERT INTO article ";
+		sql += String.format("SET regDate = '%s'", article.getRegDate());
+		sql += String.format(", title = '%s'", article.getTitle());
+		sql += String.format(", `body` = '%s'", article.getBody());
+		sql += String.format(", memberId = '%d'", article.getMemberId());
+		sql += String.format(", boardId = '%d'", article.getBoardId());
+
+		return dbConnection.insert(sql);
 	}
 
 	public Board getBoard(int id) {
@@ -550,7 +772,14 @@ class ArticleDao {
 	}
 
 	public List<Article> getArticles() {
-		return db.getArticles();
+		List<Map<String, Object>> rows = dbConnection.selectRows("SELECT * FROM article ORDER by id DESC");
+		List<Article> articles = new ArrayList<>();
+
+		for (Map<String, Object> row : rows) {
+			articles.add(new Article(row));
+		}
+
+		return articles;
 	}
 
 }
@@ -860,6 +1089,17 @@ class Article extends Dto {
 		this.memberId = memberId;
 		this.title = title;
 		this.body = body;
+	}
+
+	public Article(Map<String, Object> row) {
+		this.setId((int) (long) row.get("id"));
+
+		String regDate = row.get("regDate") + "";
+		this.setRegDate(regDate);
+		this.setTitle((String) row.get("title"));
+		this.setBody((String) row.get("body"));
+		this.setMemberId((int) (long) row.get("memberId"));
+		this.setBoardId((int) (long) row.get("boardId"));
 	}
 
 	public int getBoardId() {
