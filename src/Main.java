@@ -58,7 +58,7 @@ class Session {
 	}
 }
 
-//DB 커넥션(진짜 DB와의 연결을 담당)
+// DB 커넥션(진짜 DB와의 연결을 담당)
 class DBConnection {
 	private Connection connection;
 
@@ -248,6 +248,7 @@ class DBConnection {
 		}
 	}
 }
+
 // Factory
 // 프로그램 전체에서 공유되는 객체 리모콘을 보관하는 클래스
 
@@ -266,6 +267,7 @@ class Factory {
 		if (dbConnection == null) {
 			dbConnection = new DBConnection();
 		}
+
 		return dbConnection;
 	}
 
@@ -736,7 +738,8 @@ class ArticleDao {
 	DBConnection dbConnection;
 
 	ArticleDao() {
-		db = Factory.getDB();
+		db = Factory.getDB(); // 나중에 없어질
+		dbConnection = Factory.getDBConnection();
 	}
 
 	public List<Article> getArticlesByBoardCode(String code) {
@@ -780,6 +783,8 @@ class ArticleDao {
 		}
 
 		return articles;
+
+		// return db.getArticles();
 	}
 
 }
