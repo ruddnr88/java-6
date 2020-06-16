@@ -239,8 +239,40 @@ class DBConnection {
 	}
 
 	public int creatTable(String sql) {
-		return 0;
 
+		ResultSet rs = null;
+		ResultSetMetaData rsmd = null;
+		Statement statement = null;
+
+		// 어떤 sql 함수를 가져와서 써야하는지..?
+		// 테이블 자동생성?
+
+		try {
+			rs = statement.executeQuery("SHOW TABLES LIKE 'free' OR 'notice'");
+			// 테이블 유무검사
+			statement = connection.createStatement();
+
+			if (rs.next() == false) {
+				statement.executeUpdate("CREATE TABLE free(test1 INT, test1_name VARCHAR(15))");
+				statement.executeUpdate("CREATE TABLE notice(test1 INT, test1_name VARCHAR(15))");
+			}
+		} catch (SQLException e) {
+			System.err.printf("[CREAT 쿼리 오류, %s]\n" + e.getStackTrace() + "\n", sql);
+		}
+
+		try {
+			if (statement != null) {
+				statement.close();
+			}
+
+			if (rs != null) {
+				rs.close();
+			}
+		} catch (SQLException e) {
+			System.err.println("[CREAT 종료 오류]\n" + e.getStackTrace());
+		}
+
+		return hashCode();
 	}
 
 	public void close() {
