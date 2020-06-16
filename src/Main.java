@@ -238,6 +238,11 @@ class DBConnection {
 		return id;
 	}
 
+	public int creatTable(String sql) {
+		return 0;
+
+	}
+
 	public void close() {
 		try {
 			if (connection != null) {
@@ -247,6 +252,7 @@ class DBConnection {
 			System.err.println("[닫기 오류]\n" + e.getStackTrace());
 		}
 	}
+
 }
 
 // Factory
@@ -394,6 +400,7 @@ class App {
 		}
 
 		Factory.getDBConnection().close();
+		// 실행이 끝났을때 연결을 끊어줌
 		Factory.getScanner().close();
 	}
 }
@@ -537,6 +544,7 @@ class BuildController extends Controller {
 
 	private void actionSite(Request reqeust) {
 		buildService.buildSite();
+		System.out.println("사이트가 생성되었습니다.");
 	}
 }
 
@@ -751,15 +759,21 @@ class ArticleDao {
 	}
 
 	public Board getBoardByCode(String code) {
+
 		return db.getBoardByCode(code);
 	}
 
 	public int saveBoard(Board board) {
-		return db.saveBoard(board);
+		String sql = "";
+		sql += "CREATE TABLE free ()";
+		sql += "CREATE TABLE notice ()";
+		return dbConnection.creatTable(sql);
+		// return db.saveBoard(board);
 	}
 
 	public int save(Article article) {
 		String sql = "";
+//		String memberName = Factory.getSession().getLoginedMember().getName();
 		sql += "INSERT INTO article ";
 		sql += String.format("SET regDate = '%s'", article.getRegDate());
 		sql += String.format(", title = '%s'", article.getTitle());
@@ -775,6 +789,7 @@ class ArticleDao {
 	}
 
 	public List<Article> getArticles() {
+		//
 		List<Map<String, Object>> rows = dbConnection.selectRows("SELECT * FROM article ORDER by id DESC");
 		List<Article> articles = new ArrayList<>();
 
