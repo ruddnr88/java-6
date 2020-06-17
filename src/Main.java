@@ -238,11 +238,6 @@ class DBConnection {
 		return id;
 	}
 
-	public int delete(Object sql) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
 	public void close() {
 		try {
 			if (connection != null) {
@@ -505,6 +500,19 @@ class ArticleController extends Controller {
 		} else if (reqeust.getActionName().equals("detail")) {
 			actionDetail(reqeust);
 		}
+
+		if (reqeust.getActionName().equals("listBoard")) {
+			actionListBoard(reqeust);
+		}
+	}
+
+	private void actionListBoard(Request reqeust) {
+		List<Board> boards = articleService.getBoards();
+		System.out.printf("%-3s|%-18s|%-8s|%-40s\n", "번호", "날짜", "코드", "이름");
+		for (int i = 0; i < boards.size(); i++) {
+			System.out.printf("%-4s|%-20s|%-10s|%-40s\n", boards.get(i).getId() + "번", boards.get(i).getRegDate(),
+					boards.get(i).getCode(), boards.get(i).getName());
+		}
 	}
 
 	private void actionDetail(Request reqeust) {
@@ -528,7 +536,7 @@ class ArticleController extends Controller {
 			System.out.printf("%s번 게시물이 삭제되었습니다.\n", number);
 		} else if (result == -1) {
 			System.out.println("삭제할 게시물이 존재하지 않습니다.");
-		} 
+		}
 
 	}
 
@@ -889,19 +897,14 @@ class ArticleDao {
 	}
 
 	public Board getBoardByCode(String code) {
-
 		return db.getBoardByCode(code);
 	}
+	
+
 
 	public int saveBoard(Board board) {
-		String sql = "";
-//		String memberName = Factory.getSession().getLoginedMember().getName();
-		sql += "INSERT INTO board ";
-		sql += String.format("SET regDate = '%s'", board.getRegDate());
-		sql += String.format(", `name` = '%s'", board.getName());
-		sql += String.format(", `code` = '%s'", board.getCode());
 
-		return dbConnection.insert(sql);
+		return db.saveBoard(board);
 	}
 
 	public int save(Article article) {
@@ -1220,6 +1223,15 @@ class Board extends Dto {
 	public Board(String name, String code) {
 		this.name = name;
 		this.code = code;
+	}
+
+	public Board(Map<String, Object> row) {
+		this.setId((int) (long) row.get("id"));
+
+		String regDate = row.get("regDate") + "";
+		this.setRegDate(regDate);
+		this.setName((String) row.get("name"));
+		this.setCode((String) row.get("code"));
 	}
 
 	public String getName() {
