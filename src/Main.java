@@ -238,41 +238,9 @@ class DBConnection {
 		return id;
 	}
 
-	public int creatTable(String sql) {
-
-		ResultSet rs = null;
-		ResultSetMetaData rsmd = null;
-		Statement statement = null;
-
-		// 어떤 sql 함수를 가져와서 써야하는지..?
-		// 테이블 자동생성?
-
-		try {
-			rs = statement.executeQuery("SHOW TABLES LIKE 'free' OR 'notice'");
-			// 테이블 유무검사
-			statement = connection.createStatement();
-
-			if (rs.next() == false) {
-				statement.executeUpdate("CREATE TABLE free(test1 INT, test1_name VARCHAR(15))");
-				statement.executeUpdate("CREATE TABLE notice(test1 INT, test1_name VARCHAR(15))");
-			}
-		} catch (SQLException e) {
-			System.err.printf("[CREAT 쿼리 오류, %s]\n" + e.getStackTrace() + "\n", sql);
-		}
-
-		try {
-			if (statement != null) {
-				statement.close();
-			}
-
-			if (rs != null) {
-				rs.close();
-			}
-		} catch (SQLException e) {
-			System.err.println("[CREAT 종료 오류]\n" + e.getStackTrace());
-		}
-
-		return hashCode();
+	public int delete(Object sql) {
+		// TODO Auto-generated method stub
+		return 0;
 	}
 
 	public void close() {
@@ -530,15 +498,73 @@ class ArticleController extends Controller {
 			actionList(reqeust);
 		} else if (reqeust.getActionName().equals("write")) {
 			actionWrite(reqeust);
+		} else if (reqeust.getActionName().equals("modify")) {
+			actionModify(reqeust, reqeust.getArg1());
+		} else if (reqeust.getActionName().equals("delete")) {
+			actionDelete(reqeust);
+		} else if (reqeust.getActionName().equals("detail")) {
+			actionDetail(reqeust);
 		}
+	}
+
+	private void actionDetail(Request reqeust) {
+
+		int number = Integer.parseInt(reqeust.getArg1());
+		articleService.detailArticle(number);
+	}
+
+	private void actionDelete(Request reqeust) {
+		System.out.println("== 게시물 삭제 ==");
+		int number = -1;
+		try {
+			number = Integer.parseInt(reqeust.getArg1());
+		} catch (Exception e) {
+		}
+
+		int result = articleService.isExistArticle(number);
+
+		if (result != -1) {
+			articleService.deleteArticle(number);
+			System.out.printf("%s번 게시물이 삭제되었습니다.\n", number);
+		} else if (result == -1) {
+			System.out.println("삭제할 게시물이 존재하지 않습니다.");
+		} 
+
+	}
+
+	private void actionModify(Request reqeust, String arg1) {
+		int number = -1;
+
+		try {
+			number = Integer.parseInt(reqeust.getArg1());
+		} catch (Exception e) {
+		}
+
+		int result = articleService.isExistArticle(number);
+
+		if (result > 0) {
+			System.out.println("== 게시글 수정 ==");
+			System.out.printf("제목 : ");
+			String title = Factory.getScanner().nextLine();
+			System.out.printf("내용 : ");
+			String body = Factory.getScanner().nextLine();
+			articleService.modifyArticle(number, title, body);
+			System.out.println(number + "번 글이 수정되었습니다.");
+		} else if (result == -1) {
+			System.out.println("해당 번호의 게시글이 존재하지 않습니다.");
+		}
+		return;
 	}
 
 	private void actionList(Request reqeust) {
 		List<Article> articles = articleService.getArticles();
+		String articleName = Factory.getSession().getLoginedMember().getName();
 
 		System.out.println("== 게시물 리스트 시작 ==");
+		System.out.printf("%-2s|%-25s|%-28s|%-20s\n", "번호", "날짜", "제목", "작성자");
 		for (Article article : articles) {
-			System.out.printf("%d, %s, %s\n", article.getId(), article.getRegDate(), article.getTitle());
+			System.out.printf("%-4d|%-27s|%-30s|%-18s\n", article.getId(), article.getRegDate(), article.getTitle(),
+					articleName);
 		}
 		System.out.println("== 게시물 리스트 끝 ==");
 	}
@@ -711,6 +737,22 @@ class ArticleService {
 		articleDao = Factory.getArticleDao();
 	}
 
+	public void detailArticle(int number) {
+		articleDao.detailArticle(number);
+	}
+
+	public void deleteArticle(int number) {
+		articleDao.deleteArticle(number);
+	}
+
+	public void modifyArticle(int number, String title, String body) {
+		articleDao.modifyArticle(number, title, body);
+	}
+
+	public int isExistArticle(int number) {
+		return articleDao.isExistArticle(number);
+	}
+
 	public List<Article> getArticlesByBoardCode(String code) {
 		return articleDao.getArticlesByBoardCode(code);
 	}
@@ -782,6 +824,62 @@ class ArticleDao {
 		dbConnection = Factory.getDBConnection();
 	}
 
+	public void detailArticle(int number) {
+		Article a = getArticleById(number);
+		String memberName = Factory.getSession().getLoginedMember().getName();
+		if (a != null) {
+			System.out.println(a.getId() + "번 게시물 상세보기");
+			System.out.println("제목 : " + a.getTitle());
+			System.out.println("내용 : " + a.getBody());
+			System.out.println("작성자 : " + memberName);
+		} else {
+			System.out.println("존재하지 않는 게시물입니다.");
+		}
+	}
+
+	private Article getArticleById(int number) {
+		List<Article> articles = getArticles();
+		for (Article a : articles) {
+			if (a.getId() == number) {
+				return a;
+			}
+		}
+		return null;
+	}
+
+	public int deleteArticle(int number) {
+		String sql = "";
+		sql += "DELETE FROM article ";
+		sql += String.format(" WHERE id = '%d'", number);
+
+		return dbConnection.insert(sql);
+
+	}
+
+	public int modifyArticle(int number, String title, String body) {
+
+		String sql = "";
+		sql += "UPDATE article ";
+		sql += String.format("SET title = '%s'", title);
+		sql += String.format(", `body` = '%s'", body);
+		sql += String.format(" WHERE id = '%d'", number);
+		return dbConnection.update(sql);
+	}
+
+	public int isExistArticle(int number) {
+		List<Article> articles = getArticles();
+		for (Article a : articles) {
+			if (a.getId() == number) {
+				if (a.getMemberId() == Factory.getSession().getLoginedMember().getId()) {
+					return number;
+				}
+				return 0;
+			}
+		}
+		return -1;
+
+	}
+
 	public List<Article> getArticlesByBoardCode(String code) {
 		return db.getArticlesByBoardCode(code);
 	}
@@ -797,10 +895,13 @@ class ArticleDao {
 
 	public int saveBoard(Board board) {
 		String sql = "";
-		sql += "CREATE TABLE free ()";
-		sql += "CREATE TABLE notice ()";
-		return dbConnection.creatTable(sql);
-		// return db.saveBoard(board);
+//		String memberName = Factory.getSession().getLoginedMember().getName();
+		sql += "INSERT INTO board ";
+		sql += String.format("SET regDate = '%s'", board.getRegDate());
+		sql += String.format(", `name` = '%s'", board.getName());
+		sql += String.format(", `code` = '%s'", board.getCode());
+
+		return dbConnection.insert(sql);
 	}
 
 	public int save(Article article) {
@@ -873,6 +974,19 @@ class DB {
 		tables.put("article", new Table<Article>(Article.class, dbDirPath));
 		tables.put("board", new Table<Board>(Board.class, dbDirPath));
 		tables.put("member", new Table<Member>(Member.class, dbDirPath));
+	}
+
+	public int isExistArticle(int number) {
+		List<Article> articles = getArticles();
+		for (Article a : articles) {
+			if (a.getId() == number) {
+				if (a.getMemberId() == Factory.getSession().getLoginedMember().getId()) {
+					return number;
+				}
+				return 0;
+			}
+		}
+		return -1;
 	}
 
 	public List<Article> getArticlesByBoardCode(String code) {
